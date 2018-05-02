@@ -22,9 +22,11 @@ String clientId = "ESP32-Shabarova"; //Шабарова, Зоя Алексеев
 #define PUB_STEPS2 "/ESP32-Shabarova/Borisov_step/"
 #define PUB_STEPS1 "/ESP32-Shabarova/Obuhov_step/"
 #define CURTMAXIMUM 550
+#define STOPHYSTERESIS 5
+#define MSG_BUFFER_SIZE 20
 
 const char *Topic1 = MQTT_STEP1;
-
+//to do add array of pins and steppers
 int switch_1_pin = 17;
 int switch_2_pin = 16;
 
@@ -37,9 +39,6 @@ bool CurtHyster1 = false;
 int32_t steps_from_zero1 = 0;
 bool CurtHyster2 = false;
 int32_t steps_from_zero2 = 0;
-char message_buff[100];
-char payloadStepper[10];
-const uint8_t MSG_BUFFER_SIZE = 20;
 char m_msg_buffer[MSG_BUFFER_SIZE]; 
 // Define a stepper and the pins it will use
 AccelStepper stepper1(AccelStepper::HALF4WIRE, 32, 25, 33, 26); // Defaults to AccelStepper::FULL4WIRE (4 pins) on 2, 3, 4, 5
@@ -56,7 +55,6 @@ PubSubClient client(espClient);
 const char *p_payload;
 float got_float;
 int i;
-
 
 void setup_wifi()
 {
@@ -75,10 +73,10 @@ void callback(char *topic, byte *payload, unsigned int length)
   
   for (i = 0; i < length; i++)
   {
-    message_buff[i] = payload[i];
+    m_msg_buffer[i] = payload[i];
   }
-  message_buff[i] = '\0';
-  p_payload = message_buff;
+  m_msg_buffer[i] = '\0';
+  p_payload = m_msg_buffer;
   got_float = atof(p_payload);
   //if (memcmp(topic, Topic1, 6))
   if (strcmp(topic, MQTT_STEP1) == 0)
@@ -132,30 +130,18 @@ void setup()
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
-  // set the speed at 200 rpm:
+  // set the speed at 600 rpm:
   stepper1.setMaxSpeed(600);
   stepper1.setAcceleration(300);
   stepper2.setMaxSpeed(600);
   stepper2.setAcceleration(300);
 }
-
-void loop()
-{
-  if (!client.connected())
-  {
-    reconnect();
-  }
-  checkStep1();
-  checkStep2();
-  client.loop();
-  //delay(50);
-}
-
+//to do rebase for 1 function
 void checkStep1 (void)
 {
   if (CurtHyster1 == true)
   {
-    if (((steps_from_zero1 > 2) && (steps_from_zero1 < CURTMAXIMUM - 2)) || (steps_from_zero1 < -2) || (steps_from_zero1 > CURTMAXIMUM + 2))
+    if (((steps_from_zero2 > STOPHYSTERESIS) && (steps_from_zero2 < CURTMAXIMUM - STOPHYSTERESIS)) || (steps_from_zero2 < -STOPHYSTERESIS) || (steps_from_zero2 > CURTMAXIMUM + STOPHYSTERESIS))
     {
       CurtHyster1 = false;
     }
@@ -193,18 +179,13 @@ void checkStep1 (void)
   {
     stepper1.run();
   }
-  else
-  {
-    stepper1.stop();
-    stepper1.disableOutputs();
-  }
 }
 
 void checkStep2 (void)
 {
   if (CurtHyster2 == true)
   {
-    if (((steps_from_zero2 > 2) && (steps_from_zero2 < CURTMAXIMUM - 2)) || (steps_from_zero2 < -2) || (steps_from_zero2 > CURTMAXIMUM + 2))
+    if (((steps_from_zero2 > STOPHYSTERESIS) && (steps_from_zero2 < CURTMAXIMUM - STOPHYSTERESIS)) || (steps_from_zero2 < -STOPHYSTERESIS) || (steps_from_zero2 > CURTMAXIMUM + STOPHYSTERESIS))
     {
       CurtHyster2 = false;
     }
@@ -242,10 +223,19 @@ void checkStep2 (void)
   {
     stepper2.run();
   }
-  else
-  {
-    stepper2.stop();
-    stepper2.disableOutputs();
-  }
 }
+
+void loop()
+{
+  if (!client.connected())
+  {
+    reconnect();
+    delay(1000);
+  }
+  checkStep1();
+  checkStep2();
+  client.loop();
+}
+
+
 
